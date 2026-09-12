@@ -119,3 +119,66 @@ build.cmd
 
 [MIT](LICENSE) · Files 本身为 [Files 社区](https://github.com/files-community/Files) 的
 独立项目（MIT/MPL），本项目不含其任何代码或资源
+
+---
+
+## ⚠️ 安装前须知（第一次装的人请先看这里）
+
+### 1. 请先装好 Files
+
+本工具是给 [Files](https://github.com/files-community/Files) 用的**配套增强**，不是替代品。
+国内建议直接去**微软商店**搜 `Files` 安装（比 GitHub 下载快很多）：
+<https://apps.microsoft.com/detail/9nghp3dx8hdx>
+
+装好后建议在 Files 的 **设置 → 高级** 里打开「设为默认文件管理器」，本工具会在它之上**补回启动动画**、
+并额外接管「此电脑 / Win+E / 驱动器」。
+
+### 2. 首次运行会有蓝色警告框，这是正常的
+
+程序**没有购买代码签名证书**（个人开源项目，证书一年要几百到几千元），所以 Windows 会提示
+"Windows 已保护你的电脑"。
+
+处理方式：点 **更多信息** → **仍要运行**。
+
+如果你想完全避免这个提示，可以自己用 `build.cmd` 从源码编译（只需要 Windows 自带的编译器）。
+
+### 3. 装完先看自检报告
+
+安装器完成后会**在同一个窗口**列出检测结果：
+
+- ✓ 表示该项正常
+- ✗ 会直接告诉你该怎么处理
+
+也可以随时单独检查（不安装任何东西）：
+
+```cmd
+FilesCompanionSetup.exe --verify
+```
+
+或者用已安装的命令行自检：
+
+```cmd
+"%LOCALAPPDATA%\FilesCompanion\FilesOpen.exe" --doctor
+```
+
+### 4. 常见问题
+
+**Q：这不就是 Files 自带的功能吗？**
+
+Files 确实自带「设为默认文件管理器」，但它为了打开够快会**常驻后台**，导致 Windows
+**跳过启动动画** —— 点文件夹时窗口是"凭空出现"的。本工具补的正是这段动画 ✔
+另外还修了 Win+E 落到画不出容量条的页面、以及把回收站换成现代化版本 ✔
+
+**Q：会不会改坏系统？需不需要管理员权限？**
+
+**不需要管理员权限** ✔ 全部改动只在 `HKEY_CURRENT_USER` 下 ✔
+卸载运行 `%LOCALAPPDATA%\FilesCompanion\Uninstall.cmd`，会恢复默认打开方式并删除全部文件 ✔
+
+**Q：卸载后能完全恢复吗？**
+
+能 ✔ 而且卸载时**只删除仍然指向本程序的值** —— 你手工配置过的内容不会被误删 ✔
+
+**Q：支持 Windows 10 吗？**
+
+支持（64 位）✔ 回收站组件需要 WebView2 运行时，Windows 11 已内置；
+Windows 10 若缺失，安装器的自检会提示并给出微软官方下载链接 ✔
