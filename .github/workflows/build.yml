@@ -1,0 +1,23 @@
+name: build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (uses the in-box .NET Framework compiler)
+        shell: cmd
+        run: build.cmd
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: FilesCompanionSetup
+          path: dist/FilesCompanionSetup.exe
