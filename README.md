@@ -241,3 +241,46 @@ Files itself is a separate project by the
 Files Companion contains no code or assets from Files — it only starts it and
 redirects shell verbs to it. The bundled WebView2 runtime loader is Microsoft's,
 under the terms in `vendor\RecycleBin\WebView2-LICENSE.txt`.
+
+## ✅ Will it work on my machine?
+
+The companion has to find Files, and Files can be installed in several ways — the
+Microsoft Store build, the classic installer from GitHub, winget, scoop — each of
+which puts its launcher somewhere different. Earlier versions probed two fixed
+paths, so a machine with a different install silently did nothing when you
+double-clicked a folder. That is fixed:
+
+1. `%LOCALAPPDATA%\Files\Files.App.Launcher.exe` (classic installer)
+2. **any** `files*.exe` execution alias in `%LOCALAPPDATA%\Microsoft\WindowsApps`
+   — auto-detected, so `files-stable`, `files-preview` and future names all work
+3. `%ProgramFiles%\Files\…` and `%ProgramFiles(x86)%\Files\…`
+4. the AppX package root recorded by the Windows package repository
+5. winget and scoop install trees
+6. **if nothing matches, the folder opens in Explorer instead** — a working window
+   rather than a dead double-click
+
+### Check your own machine in five seconds
+
+```
+"%LOCALAPPDATA%\FilesCompanion\FilesOpen.exe" --doctor
+```
+
+A report opens in Notepad listing:
+
+- which Files launcher was found, and by which strategy
+- the state of all eight shell redirects (folders, drives, This PC, Win+E, Recycle Bin)
+- whether the WebView2 Runtime is present for the Recycle Bin component
+- a plain **Result** line saying whether the setup is ready
+
+If it says *not ready*, send that report with your issue — it contains exactly
+what is needed to see why.
+
+### Honest limits
+
+- **64-bit Windows only.** The binaries are x64; a 32-bit install cannot run them.
+- **The interface is Simplified Chinese.** It renders correctly on any Windows
+  (Microsoft YaHei ships with every SKU), but the text is Chinese; English strings
+  are planned.
+- **Not code-signed**, so SmartScreen may ask you to confirm the first run.
+- The companion cannot create a Files installation: if Files is not installed at
+  all, folder opens fall back to Explorer.

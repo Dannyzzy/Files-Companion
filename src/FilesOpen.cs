@@ -105,6 +105,15 @@ internal static class Program
             return;
         }
 
+        // Self-check: writes a report of everything this machine offers and opens
+        // it in Notepad. Exists so a user (or we) can tell in seconds whether the
+        // companion will work here, instead of guessing from a silent no-op.
+        if (target == "--doctor")
+        {
+            RunDoctor();
+            return;
+        }
+
         // The Recycle Bin is served by our own viewer (RecycleBin.exe, next to this
         // file): a plain WinForms window, so it neither flashes the screen black
         // the way a Files window does, nor leaves a File Explorer button in the
@@ -167,48 +176,202 @@ internal static class Program
         catch { }
     }
 
+    /// <summary>
+    /// Starts Files, then plays the animation.
+    ///
+    /// Files can be installed in several ways and each one puts its launcher
+    /// somewhere different: the Store build uses an App Execution Alias, the
+    /// classic GitHub installer drops a launcher under %LOCALAPPDATA%\Files,
+    /// winget and scoop use their own trees. Probing a single hardcoded path is
+    /// why a folder open could do nothing at all on somebody else's machine, so
+    /// every plausible location is tried and, failing everything, Explorer takes
+    /// over - a working window beats a silent no-op.
+    /// </summary>
     private static void LaunchFiles(string target)
     {
-        try
+        // A protocol URI carries an app-internal target (for example the Home
+        // page). It must go through ShellExecute: the launcher below would treat
+        // it as a file-system path and fail.
+        if (!string.IsNullOrEmpty(target) &&
+            (target.StartsWith("files-stable:", StringComparison.OrdinalIgnoreCase) ||
+             target.StartsWith("files-preview:", StringComparison.OrdinalIgnoreCase) ||
+             target.StartsWith("files:", StringComparison.OrdinalIgnoreCase)))
         {
-            // A "files-stable:" URI carries an app-internal target (for example the
-            // Home page). It must go through ShellExecute - the launcher below would
-            // treat it as a file-system path and fail.
-            if (!string.IsNullOrEmpty(target) &&
-                target.StartsWith("files-stable:", StringComparison.OrdinalIgnoreCase))
+            try
             {
                 Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
                 return;
             }
+            catch { /* fall through to the normal path */ }
+        }
 
-            // "This PC", its namespace siblings and Win+E: activating Files with NO
-            // argument reuses the running instance AND lands on the Home page - the
-            // one with the drive capacity cards. (Measured.) Passing the namespace
-            // CLSID would open the bare item list instead, and the protocol URI
-            // would spawn a whole new process - both worse.
-            string home = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string how;
+        string exe = FindFilesLauncher(out how);
 
-            string launcher = Path.Combine(home, "Files", "Files.App.Launcher.exe");
-            string exe = File.Exists(launcher)
-                ? launcher
-                : Path.Combine(home, @"Microsoft\WindowsApps\files-stable.exe");
+        if (string.IsNullOrEmpty(exe))
+        {
+            Log("no Files launcher found -> falling back to Explorer");
+            FallbackToExplorer(target);
+            return;
+        }
 
-            // Folder opens reuse the running instance too: one process, one taskbar
-            // entry, ~465 MB in total, and the window paints in ~0.3 s.
-            string argument = string.IsNullOrEmpty(target) || IsThisPc(target)
-                ? string.Empty
-                : Quote(target);
+        // "This PC", its namespace siblings and Win+E: activating Files with NO
+        // argument reuses the running instance AND lands on the Home page - the one
+        // with the drive capacity cards. (Measured.) Passing the namespace CLSID
+        // would open the bare item list, and a protocol URI would spawn a whole new
+        // process - both worse.
+        string argument = string.IsNullOrEmpty(target) || IsThisPc(target)
+            ? string.Empty
+            : Quote(target);
 
+        try
+        {
             Process.Start(new ProcessStartInfo(exe)
             {
                 UseShellExecute = true,
                 Arguments = argument
             });
+            Log("launched via " + how + ": " + exe);
         }
-        catch
+        catch (Exception ex)
         {
-            // Nothing useful to do here; fall through and exit quietly.
+            Log("launch failed (" + ex.ToString() + ") -> falling back to Explorer");
+            FallbackToExplorer(target);
         }
+    }
+
+    /// <summary>
+    /// Locates Files' launcher, trying every install flavour in turn. The "how"
+    /// out-parameter names the strategy that matched, which is what makes the
+    /// self-check report readable.
+    /// </summary>
+    private static string FindFilesLauncher(out string how)
+    {
+        how = null;
+
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+        // 1) classic installer: a launcher directly under %LOCALAPPDATA%\Files
+        try
+        {
+            string a = Path.Combine(local, @"Files\Files.App.Launcher.exe");
+            if (File.Exists(a)) { how = "%LOCALAPPDATA%\\Files"; return a; }
+        }
+        catch { }
+
+        // 2) Store build: look at the execution aliases that actually exist rather
+        //    than hardcoding "files-stable" - preview and dev builds differ, and
+        //    the alias name is a package manifest detail that can change.
+        try
+        {
+            string apps = Path.Combine(local, @"Microsoft\WindowsApps");
+            if (Directory.Exists(apps))
+            {
+                string[] hits = Directory.GetFiles(apps, "files*.exe");
+                if (hits.Length > 0)
+                {
+                    Array.Sort(hits, delegate(string x, string y)
+                    {
+                        int sx = x.IndexOf("stable", StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1;
+                        int sy = y.IndexOf("stable", StringComparison.OrdinalIgnoreCase) >= 0 ? 0 : 1;
+                        if (sx != sy) return sx - sy;
+                        return string.Compare(x, y, StringComparison.OrdinalIgnoreCase);
+                    });
+                    how = "Store alias (" + Path.GetFileName(hits[0]) + ", " + hits.Length + " found)";
+                    return hits[0];
+                }
+            }
+        }
+        catch { }
+
+        // 3) a machine-wide install
+        foreach (string root in new string[] { pf, pf86 })
+        {
+            if (string.IsNullOrEmpty(root)) continue;
+            try
+            {
+                string b = Path.Combine(root, @"Files\Files.App.Launcher.exe");
+                if (File.Exists(b)) { how = "Program Files"; return b; }
+            }
+            catch { }
+        }
+
+        // 4) the package root recorded by the AppX repository - covers a Store
+        //    install whose alias folder is missing or locked down
+        try
+        {
+            string repo = @"SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages";
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(repo))
+            {
+                if (k != null)
+                {
+                    string[] subs = k.GetSubKeyNames();
+                    Array.Sort(subs);
+                    Array.Reverse(subs);   // newest package version first
+                    foreach (string sub in subs)
+                    {
+                        if (sub.IndexOf("Files_", StringComparison.OrdinalIgnoreCase) != 0) continue;
+                        using (Microsoft.Win32.RegistryKey pk = k.OpenSubKey(sub))
+                        {
+                            if (pk == null) continue;
+                            string proot = pk.GetValue("PackageRoot") as string;
+                            if (string.IsNullOrEmpty(proot)) continue;
+                            string c = Path.Combine(proot, "Files.App.Launcher.exe");
+                            if (File.Exists(c)) { how = "AppX package (" + sub.Split('_')[0] + ")"; return c; }
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // 5) winget and scoop trees
+        try
+        {
+            string winget = Path.Combine(local, @"Microsoft\WinGet\Packages");
+            if (Directory.Exists(winget))
+            {
+                foreach (string d in Directory.GetDirectories(winget, "Files*"))
+                {
+                    string c = Path.Combine(d, "Files.App.Launcher.exe");
+                    if (File.Exists(c)) { how = "winget"; return c; }
+                }
+            }
+        }
+        catch { }
+        try
+        {
+            string scoop = Path.Combine(roaming, @"scoop\apps\files\current\Files.App.Launcher.exe");
+            if (File.Exists(scoop)) { how = "scoop"; return scoop; }
+        }
+        catch { }
+
+        // 6) last resort before Explorer: ask the shell to resolve the alias by name
+        try
+        {
+            string alias = Path.Combine(local, @"Microsoft\WindowsApps\files-stable.exe");
+            if (File.Exists(alias)) { how = "Store alias (files-stable)"; return alias; }
+        }
+        catch { }
+
+        return null;
+    }
+
+    /// <summary>Opens the folder the way Windows would have if this shim were not
+    /// installed, so an unrecognised Files install never leaves a dead double-click.</summary>
+    private static void FallbackToExplorer(string target)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(target) || IsThisPc(target))
+                Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true });
+            else
+                Process.Start(new ProcessStartInfo("explorer.exe") { UseShellExecute = true, Arguments = Quote(target) });
+        }
+        catch { }
     }
 
     private static string Quote(string s)
@@ -227,6 +390,131 @@ internal static class Program
             File.AppendAllText(path, DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + line + Environment.NewLine);
         }
         catch { }
+    }
+
+    /// <summary>
+    /// Writes a report of everything the companion depends on and opens it in
+    /// Notepad.  Usage:  FilesOpen.exe --doctor
+    ///
+    /// This exists because the interesting failures are silent: if Files cannot be
+    /// found, a folder open simply does nothing. Rather than have someone guess,
+    /// the report says exactly what was detected on THIS machine.
+    /// </summary>
+    private static void RunDoctor()
+    {
+        string text = "";
+        text += "Files Companion - self check" + Environment.NewLine;
+        text += "=============================" + Environment.NewLine;
+        text += "Time        : " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine;
+        text += "Windows     : " + Environment.OSVersion.VersionString + Environment.NewLine;
+        text += "64-bit OS   : " + (Environment.Is64BitOperatingSystem ? "yes" : "no") + Environment.NewLine;
+        text += "64-bit proc : " + (Environment.Is64BitProcess ? "yes" : "no") + Environment.NewLine;
+        try
+        {
+            using (var g = Graphics.FromHwnd(IntPtr.Zero))
+                text += "Display DPI : " + g.DpiX + " (" + (int)Math.Round(g.DpiX / 96.0 * 100) + "%)" + Environment.NewLine;
+        }
+        catch { }
+        text += Environment.NewLine;
+
+        // --- where is Files ---------------------------------------------------
+        text += "Files launcher" + Environment.NewLine;
+        string how;
+        string exe = FindFilesLauncher(out how);
+        if (!string.IsNullOrEmpty(exe))
+        {
+            text += "  OK      : " + exe + Environment.NewLine;
+            text += "  found by: " + how + Environment.NewLine;
+        }
+        else
+        {
+            text += "  MISSING : could not locate a Files launcher." + Environment.NewLine;
+            text += "            Folder opens will fall back to Explorer." + Environment.NewLine;
+            text += "            Install Files from https://github.com/files-community/Files" + Environment.NewLine;
+            text += "            (or the Microsoft Store) and run this check again." + Environment.NewLine;
+        }
+        text += Environment.NewLine;
+
+        // --- the shell redirects ---------------------------------------------
+        text += "Shell redirects (HKEY_CURRENT_USER)" + Environment.NewLine;
+        string[][] routes = new string[][]
+        {
+            new string[] { "Folders  ", @"SOFTWARE\Classes\Folder\shell\open\command" },
+            new string[] { "Explore  ", @"SOFTWARE\Classes\Folder\shell\explore\command" },
+            new string[] { "Namespace", @"SOFTWARE\Classes\Folder\shell\OpenWithFiles\command" },
+            new string[] { "Directory", @"SOFTWARE\Classes\Directory\shell\OpenWithFiles\command" },
+            new string[] { "Drives   ", @"SOFTWARE\Classes\Drive\shell\OpenWithFiles\command" },
+            new string[] { "Win+E    ", @"SOFTWARE\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}\shell\opennewwindow\command" },
+            new string[] { "This PC  ", @"SOFTWARE\Classes\CLSID\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\shell\open\command" },
+            new string[] { "Recycle  ", @"SOFTWARE\Classes\CLSID\{645FF040-5081-101B-9F08-00AA002F954E}\shell\open\command" },
+        };
+        bool anyRoute = false;
+        foreach (string[] r in routes)
+        {
+            string value = null;
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(r[1]))
+                    if (k != null) value = k.GetValue(string.Empty) as string;
+            }
+            catch { }
+            text += "  " + r[0] + " : " + (string.IsNullOrEmpty(value) ? "(not set)" : value) + Environment.NewLine;
+            if (!string.IsNullOrEmpty(value)) anyRoute = true;
+        }
+        if (!anyRoute)
+            text += "  NOTE: nothing is redirected, so the enhancement layer is not installed." + Environment.NewLine;
+        text += Environment.NewLine;
+
+        // --- the Recycle Bin component ---------------------------------------
+        text += "Recycle Bin component" + Environment.NewLine;
+        string rb = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            @"ModernRecycleBin\RecycleBin.exe");
+        text += "  " + (File.Exists(rb) ? "OK      : " + rb : "MISSING : " + rb) + Environment.NewLine;
+        text += "  WebView2: " + (WebView2Present() ? "installed" : "MISSING - the Recycle Bin UI needs it") + Environment.NewLine;
+        text += Environment.NewLine;
+
+        // --- verdict ----------------------------------------------------------
+        bool ok = !string.IsNullOrEmpty(exe) && anyRoute;
+        text += "Result" + Environment.NewLine;
+        if (ok)
+            text += "  Ready. Double-clicking a folder should open Files with the launch animation." + Environment.NewLine;
+        else if (string.IsNullOrEmpty(exe))
+            text += "  Not ready: Files was not found. Folder opens will use Explorer instead." + Environment.NewLine;
+        else
+            text += "  Not ready: the shell redirects are missing. Run the installer again." + Environment.NewLine;
+
+        string outPath = Path.Combine(Path.GetDirectoryName(typeof(Program).Assembly.Location), "doctor.txt");
+        try { File.WriteAllText(outPath, text); } catch { }
+        Log("doctor written to " + outPath);
+
+        try { Process.Start("notepad.exe", "\"" + outPath + "\""); } catch { }
+    }
+
+    /// <summary>The Recycle Bin UI is rendered by WebView2, so its runtime has to be
+    /// present. Windows 11 and current Windows 10 ship it.</summary>
+    private static bool WebView2Present()
+    {
+        string[] keys = new string[]
+        {
+            @"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            @"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        };
+        foreach (string sub in keys)
+        {
+            try
+            {
+                using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(sub))
+                {
+                    if (k != null)
+                    {
+                        string pv = k.GetValue("pv") as string;
+                        if (!string.IsNullOrEmpty(pv)) return true;
+                    }
+                }
+            }
+            catch { }
+        }
+        return false;
     }
 
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc lpEnumFunc, IntPtr lParam);
