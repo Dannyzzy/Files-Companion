@@ -27,6 +27,7 @@
 // .NET Framework only, compiled with the in-box csc (C# 5 syntax).
 
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -41,7 +42,7 @@ using Microsoft.Win32;
 internal static class Program
 {
     internal const string AppName = "Files Companion";
-    internal const string Version = "1.2.0";
+    internal const string Version = "1.2.2";
     internal const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
 
     internal static bool Silent;
@@ -53,6 +54,7 @@ internal static class Program
     {
         bool uninstall = Has(args, "--uninstall");
         bool silent = Has(args, "--silent") || Has(args, "/S");
+        bool verify = Has(args, "--verify");
         bool noRouting = Has(args, "--no-routing");
         bool noRecycleBin = Has(args, "--no-recycle-bin");
         Silent = silent;
@@ -72,7 +74,7 @@ internal static class Program
                 else Installer.Install(!noRouting, !noRecycleBin, null);
                 return;
             }
-            Application.Run(new SetupForm(uninstall));
+            Application.Run(new SetupForm(uninstall, verify));
         }
         catch (Exception ex)
         {
@@ -106,6 +108,7 @@ internal static class Theme
     internal static readonly Color Accent    = Color.FromArgb(0x8C, 0x6E, 0xFA);
     internal static readonly Color AccentHi  = Color.FromArgb(0x9E, 0x85, 0xFB);
     internal static readonly Color Track     = Color.FromArgb(0x35, 0x39, 0x3F);
+    internal static readonly Color Warn      = Color.FromArgb(0xFF, 0xC1, 0x7A);
 
     internal static GraphicsPath Round(Rectangle r, int radius)
     {
@@ -281,6 +284,150 @@ internal static class Installer
                 Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
+    /// <summary>
+    /// Checks everything the companion depends on and returns one line per item.
+    /// Shown right after installing - and by --verify - so a problem is visible
+    /// immediately instead of surfacing later as "it does nothing".
+    /// </summary>
+    internal static string[] Verify(bool withRecycleBin)
+    {
+        var lines = new List<string>();
+
+        // 1) can we find Files at all?
+        string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        string found = null;
+        string how = null;
+        string a = Path.Combine(local, @"Files\Files.App.Launcher.exe");
+        if (File.Exists(a)) { found = a; how = "本地 Files 目录"; }
+        if (found == null)
+        {
+            try
+            {
+                string apps = Path.Combine(local, @"Microsoft\WindowsApps");
+                if (Directory.Exists(apps))
+                {
+                    string[] hits = Directory.GetFiles(apps, "files*.exe");
+                    if (hits.Length > 0) { found = hits[0]; how = "商店执行别名 " + Path.GetFileName(hits[0]); }
+                }
+            }
+            catch { }
+        }
+        if (found == null)
+        {
+            foreach (string root in new string[] {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) })
+            {
+                if (string.IsNullOrEmpty(root)) continue;
+                string b = Path.Combine(root, @"Files\Files.App.Launcher.exe");
+                if (File.Exists(b)) { found = b; how = "Program Files"; break; }
+            }
+        }
+        if (found == null)
+        {
+            try
+            {
+                string repo = @"SOFTWARE\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages";
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(repo))
+                {
+                    if (k != null)
+                    {
+                        foreach (string sub in k.GetSubKeyNames())
+                        {
+                            if (sub.IndexOf("Files_", StringComparison.OrdinalIgnoreCase) != 0) continue;
+                            using (RegistryKey pk = k.OpenSubKey(sub))
+                            {
+                                if (pk == null) continue;
+                                string proot = pk.GetValue("PackageRoot") as string;
+                                if (string.IsNullOrEmpty(proot)) continue;
+                                string c = Path.Combine(proot, "Files.App.Launcher.exe");
+                                if (File.Exists(c)) { found = c; how = "AppX 包目录"; break; }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        if (found != null)
+            lines.Add("✓ 已找到 Files（" + how + "）");
+        else
+            lines.Add("✗ 未找到 Files —— 双击文件夹将由资源管理器打开，请先安装 Files");
+
+        // 2) the shell redirects
+        string[][] routes = new string[][]
+        {
+            new string[] { "文件夹双击", @"SOFTWARE\Classes\Folder\shell\open\command" },
+            new string[] { "右键新窗口", @"SOFTWARE\Classes\Folder\shell\explore\command" },
+            new string[] { "命名空间",   @"SOFTWARE\Classes\Folder\shell\OpenWithFiles\command" },
+            new string[] { "目录",       @"SOFTWARE\Classes\Directory\shell\OpenWithFiles\command" },
+            new string[] { "驱动器",     @"SOFTWARE\Classes\Drive\shell\OpenWithFiles\command" },
+            new string[] { "Win+E",      @"SOFTWARE\Classes\CLSID\{52205fd8-5dfb-447d-801a-d0b52f2e83e1}\shell\opennewwindow\command" },
+            new string[] { "此电脑",     @"SOFTWARE\Classes\CLSID\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\shell\open\command" },
+        };
+        var missing = new List<string>();
+        var custom = new List<string>();
+        foreach (string[] r in routes)
+        {
+            string v = null;
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(r[1]))
+                    if (k != null) v = k.GetValue(string.Empty) as string;
+            }
+            catch { }
+
+            if (v == null) missing.Add(r[0]);
+            else if (v.IndexOf(ShimPath, StringComparison.OrdinalIgnoreCase) >= 0) { /* ours */ }
+            else if (v.IndexOf("FilesOpen.exe", StringComparison.OrdinalIgnoreCase) >= 0) custom.Add(r[0]);
+            else missing.Add(r[0]);
+        }
+        if (missing.Count == 0 && custom.Count == 0)
+            lines.Add("✓ 7 个打开入口已接管（文件夹 · 驱动器 · 此电脑 · Win+E）");
+        else if (missing.Count == 0)
+            lines.Add("✓ 7 个打开入口已接管（其中 " + custom.Count + " 个指向自定义的 FilesOpen.exe）");
+        else
+            lines.Add("✗ 有 " + missing.Count + " 个入口未接管：" + string.Join("、", missing.ToArray()));
+
+        // 3) the Recycle Bin component
+        if (withRecycleBin)
+        {
+            if (File.Exists(RecycleBinExe)) lines.Add("✓ 回收站组件已安装");
+            else lines.Add("✗ 回收站组件缺失");
+
+            if (WebView2Installed()) lines.Add("✓ WebView2 运行时可用");
+            else lines.Add("✗ 缺少 WebView2 运行时 —— 回收站界面无法显示，请安装微软官方组件");
+        }
+
+        return lines.ToArray();
+    }
+
+    internal static bool WebView2Installed()
+    {
+        string[] keys = new string[]
+        {
+            @"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            @"SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        };
+        foreach (string sub in keys)
+        {
+            try
+            {
+                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(sub))
+                {
+                    if (k != null)
+                    {
+                        string pv = k.GetValue("pv") as string;
+                        if (!string.IsNullOrEmpty(pv)) return true;
+                    }
+                }
+            }
+            catch { }
+        }
+        return false;
+    }
+
     private static void DeleteFolder(string dir)
     {
         for (int attempt = 0; attempt < 8; attempt++)
@@ -442,7 +589,10 @@ internal sealed class SetupForm : Form
     private bool _busy;
     private int _hover;                        // 0 none, 1 install, 2 close, 31/32 cards
 
-    internal SetupForm(bool uninstall)
+    private string[] _report;                  // non-null: show the verification result
+    private bool _done;                        // the button now just closes
+
+    internal SetupForm(bool uninstall, bool verify)
     {
         _uninstall = uninstall;
 
@@ -456,6 +606,13 @@ internal sealed class SetupForm : Form
         _fBtn   = Theme.Ui(11f, FontStyle.Regular);
 
         _status = uninstall ? "点击下方按钮开始卸载。" : "点击下方按钮开始安装。";
+
+        if (verify)
+        {
+            _report = Installer.Verify(true);
+            _status = "以下是本机检测结果：";
+            _done = true;
+        }
 
         Text = Program.AppName;
         FormBorderStyle = FormBorderStyle.None;
@@ -508,15 +665,26 @@ internal sealed class SetupForm : Form
         int y = S(84);
 
         // headline
-        TextRenderer.DrawText(g, _uninstall ? "卸载 Files Companion" : "安装 Files Companion",
+        TextRenderer.DrawText(g,
+            _report != null ? "Files Companion 自检"
+                            : (_uninstall ? "卸载 Files Companion" : "安装 Files Companion"),
             _fH1, new Point(PAD_S, y), Theme.Ink, TextFormatFlags.NoPadding);
         y += S(38);
 
         TextRenderer.DrawText(g,
-            _uninstall ? "恢复文件夹、驱动器、此电脑的默认打开方式，并删除两个组件。"
-                       : "为 Files 补回启动动画与智能路由，并把回收站换成现代化版本。",
+            _report != null ? "下面是本机各项条件的检测结果，出现 ✗ 请按提示处理。"
+                            : (_uninstall ? "恢复文件夹、驱动器、此电脑的默认打开方式，并删除两个组件。"
+                                          : "为 Files 补回启动动画与智能路由，并把回收站换成现代化版本。"),
             _fBody, new Point(PAD_S, y), Theme.InkDim, TextFormatFlags.NoPadding);
         y += S(26);
+
+        if (_report != null)
+        {
+            DrawReport(g, y);
+            DrawButtons(g);
+            DrawFooter(g);
+            return;
+        }
 
         if (!_uninstall)
         {
@@ -632,6 +800,26 @@ internal sealed class SetupForm : Form
         TextRenderer.DrawText(g, sub, _fSmall, new Point(tx, y + S(40)), Theme.InkFaint, TextFormatFlags.NoPadding);
     }
 
+    /// <summary>One line per checked item, marked ✓ or ✗.</summary>
+    private void DrawReport(Graphics g, int y)
+    {
+        int n = _report == null ? 0 : _report.Length;
+        var box = new Rectangle(PAD_S, y - S(6), Width - PAD_S * 2, S(30) * n + S(22));
+        using (var p = Theme.Round(box, S(12)))
+        {
+            using (var b = new SolidBrush(Theme.Card)) g.FillPath(b, p);
+            using (var pen = new Pen(Theme.Line, SF(1f))) g.DrawPath(pen, p);
+        }
+        int ly = y + S(6);
+        foreach (string line in _report)
+        {
+            bool ok = line.StartsWith("✓");
+            TextRenderer.DrawText(g, line, _fSmall, new Point(box.X + S(18), ly),
+                ok ? Theme.Ink : Theme.Warn, TextFormatFlags.NoPadding);
+            ly += S(30);
+        }
+    }
+
     private Rectangle ButtonRect
     {
         get
@@ -653,7 +841,7 @@ internal sealed class SetupForm : Form
             using (var b = new SolidBrush(fill)) g.FillPath(b, p);
         }
 
-        string label = _uninstall ? "卸载" : "一键安装";
+        string label = _done ? "完成" : (_uninstall ? "卸载" : "一键安装");
         var sz = TextRenderer.MeasureText(g, label, _fBtn, new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding);
         TextRenderer.DrawText(g, label, _fBtn,
             new Point(r.X + (r.Width - sz.Width) / 2, r.Y + (r.Height - sz.Height) / 2),
@@ -703,7 +891,12 @@ internal sealed class SetupForm : Form
         if (_busy) return;
 
         if (CloseRect.Contains(e.Location)) { Close(); return; }
-        if (ButtonRect.Contains(e.Location)) { Start(); return; }
+        if (ButtonRect.Contains(e.Location))
+        {
+            if (_done) { Close(); return; }
+            Start();
+            return;
+        }
 
         if (!_uninstall)
         {
@@ -735,13 +928,15 @@ internal sealed class SetupForm : Form
                 Installer.Install(_optRouting, _optRecycle,
                     delegate(string m) { _status = m + "…"; _progress = Math.Min(92, _progress + 18); Pump(); });
                 _progress = 100;
-                _status = "安装完成";
-                Pump();
+                _status = "安装完成，下面是本机检测结果：";
 
-                MessageBox.Show(this,
-                    "安装完成。现在双击任意文件夹或按 Win+E 试试 Files。",
-                    Program.AppName, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                Close();
+                // Show what actually landed, right here, rather than closing and
+                // leaving the user to discover later that something did not work.
+                _report = Installer.Verify(_optRecycle);
+                _done = true;
+                _busy = false;
+                Pump();
+                return;
             }
         }
         catch (Exception ex)

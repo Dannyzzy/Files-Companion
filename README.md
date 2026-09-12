@@ -59,6 +59,23 @@ restores the defaults.
 
 ## 🖼️ Screenshots
 
+### Quick start
+
+1. **Install** — run `FilesCompanionSetup.exe`, leave both boxes ticked, click
+   **一键安装**.
+2. **Read the report** — the same window then lists what was detected on your
+   machine. Every line marked ✓ is working; anything marked ✗ says what to do.
+
+   ![Self check](docs/screenshot-verify.png)
+
+3. **Use it** — double-click any folder, press `Win+E`, or open the Recycle Bin.
+
+You can run the check again at any time without installing anything:
+
+```
+FilesCompanionSetup.exe --verify
+```
+
 **The installer** — two components, and the details of both are still optional.
 
 <p align="center">
