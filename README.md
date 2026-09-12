@@ -13,14 +13,14 @@
 <h1 align="center">Files Companion</h1>
 
 <p align="center">
-  <b>Brings the startup animation back to Files — and routes folders, drives,<br/>
-  This PC and Win+E through it.</b>
+  <b>The all-in-one companion set for the Files file manager.</b><br/>
+  Launch animation · smart routing · a modern Recycle Bin — one file, one click.
 </p>
 
 <h3 align="center">
   <a href="#-installation">Installation</a>
   <span> · </span>
-  <a href="#-what-it-does">What it does</a>
+  <a href="#-the-two-components">Components</a>
   <span> · </span>
   <a href="#-how-it-works">How it works</a>
   <span> · </span>
@@ -31,7 +31,7 @@
 
 ---
 
-## 📦 What it does
+## 📦 What is this?
 
 [Files](https://github.com/files-community/Files) is a modern file manager for
 Windows. To make folders open instantly it keeps itself **resident in the
@@ -39,93 +39,123 @@ background**, which has one visible side effect: opening a folder only
 *activates* the already-running process, so **Windows skips the startup
 animation** and the window seems to appear out of nowhere.
 
-**Files Companion** adds a thin layer in front of Files that puts the animation
-back — without giving up the residency that makes Files fast.
+Files Companion is the small set of extras that makes Files feel finished:
 
-| | What it adds |
-|---|---|
-| 🎬 | **Launch animation** — Files opens with the same icon fade/zoom Windows uses for a freshly started app |
-| 🧭 | **Smart routing** — folders, drives, "This PC" and `Win+E` all open in Files instead of Explorer |
-| 🏠 | **The right landing page** — "This PC" and `Win+E` land on Files' **Home** page, which shows drive cards with capacity bars; the plain "This PC" page cannot draw those |
-| 🗑️ | **Recycle Bin link** — optionally hands the Recycle Bin to [Modern Recycle Bin](https://github.com/Dannyzzy/Modern-Recycle-Bin), so both tools work as one set |
-| ↩️ | **Fully reversible** — everything lives in `HKEY_CURRENT_USER`; uninstall restores the defaults |
+| | Component | What it does |
+|---|---|---|
+| 🎬 | **Files enhancement layer** | Puts the startup animation back, and routes folders, drives, "This PC" and `Win+E` through Files |
+| 🗑️ | **[Modern Recycle Bin](https://github.com/Dannyzzy/Modern-Recycle-Bin)** | Replaces the Recycle Bin with one that previews images, restores anywhere and copies files out |
+
+Both are built for the Files workflow, so they ship together — **one 262 KB
+installer, no network access, no administrator rights**, and uninstalling
+restores the defaults.
 
 > **This is not a Files plugin.** Files is a self-contained WinUI application with
 > no plugin or extension API — verified by searching its source for `IPlugin`,
 > `PluginManager`, `ExtensionHost`, `ShellIntegration` and `RegisterAsDefault`,
 > all of which return nothing. Files Companion therefore ships as a **companion
-> tool** that sits beside Files rather than inside it.
+> tool** that sits beside Files rather than inside it, and contains **no Files
+> code or assets**.
 
 ## 🖼️ Screenshots
 
-**The installer** — two checkboxes, no administrator rights, and an uninstall
-that puts everything back.
+**The installer** — two components, and the details of both are still optional.
 
 <p align="center">
-  <img alt="Installer" src="docs/screenshot-installer.png" width="520" />
+  <img alt="Installer" src="docs/screenshot-installer.png" width="560" />
 </p>
+
+**The Recycle Bin** that comes with it — image previews, restore anywhere, copy
+out, filter by type, Windows 11 styling.
+
+![Recycle Bin](docs/screenshot-recyclebin.png)
 
 ## 🚀 Installation
 
 1. Download **`FilesCompanionSetup.exe`** from the
    [latest release](https://github.com/Dannyzzy/Files-Companion/releases/latest).
 2. Run it — **no administrator rights required**.
-3. Choose what you want:
-   - **Enable the launch animation and smart routing** — folders, drives,
-     "This PC" and `Win+E` open in Files, with the animation restored.
-   - **Let the Recycle Bin use Modern Recycle Bin** — if that app is not installed
-     yet, this installer fetches and installs it silently (and opens its download
-     page if the download fails).
-4. Done. Double-click any folder.
+3. Untick anything you do not want, then click install.
+4. Done. Double-click any folder, press `Win+E`, or open the Recycle Bin.
 
-**To uninstall:** run `Uninstall.cmd` inside
-`%LOCALAPPDATA%\FilesCompanion`, or `%LOCALAPPDATA%\FilesCompanion-Uninstall.exe`.
-Uninstalling removes the redirects, restores the default open behaviour, and
-deletes the program folder.
+**To uninstall:** run `Uninstall.cmd` inside `%LOCALAPPDATA%\FilesCompanion`, or
+`%LOCALAPPDATA%\FilesCompanion-Uninstall.exe`. It removes the redirects, restores
+the default open behaviour for folders and the Recycle Bin, and deletes both
+component folders.
 
 <a name="requirements"></a>
 ### Requirements
 
 - **Windows 10 or 11, 64-bit**
-- **[Files](https://apps.microsoft.com/detail/9nghp3dx8hdx)** installed and set up,
-  ideally with **"Set Files as default file manager"** enabled in its advanced
-  settings — Files Companion then adds the animation and the extra routing on top
-- Anyone who prefers the portable route can simply take `FilesOpen.exe` from the
-  release and point the registry keys at it themselves (see *How it works*)
+- **[Files](https://apps.microsoft.com/detail/9nghp3dx8hdx)** installed — ideally
+  with **Settings → Advanced → Set Files as default file manager** enabled. Files
+  Companion then adds the animation and the extra routing on top.
+- The Recycle Bin component needs the **WebView2 Runtime**, which is preinstalled
+  on Windows 11 and current Windows 10 builds. The installer tells you if it is
+  missing.
+
+## 🧩 The two components
+
+### Files enhancement layer
+
+- **Launch animation** — Files opens with the icon fade/zoom Windows normally
+  plays for a freshly started app, instead of just appearing
+- **Smart routing** — folders, drives, "This PC" and `Win+E` open in Files
+  instead of Explorer
+- **The right landing page** — "This PC" and `Win+E` land on Files' **Home**, which
+  shows drive cards with capacity bars; the plain "This PC" page cannot draw those
+
+### Modern Recycle Bin
+
+- **Restore anywhere** — pick any folder, not only the original location
+- **Copy out** — take a copy while keeping the original in the bin
+- **Image previews** — see a thumbnail before restoring
+- **Filter by type** and search over name, original path and type
+- **Conflict handling** — overwrite, skip, or keep both
+- **Windows 11 styling**, comfortable/compact density, `Ctrl`+scroll zoom
+
+It is also available on its own at
+[Modern-Recycle-Bin](https://github.com/Dannyzzy/Modern-Recycle-Bin).
 
 ## 🔧 How it works
 
 ```mermaid
 flowchart LR
-    USER(["Double-click a folder<br/>This PC · Win+E"])
+    USER(["Double-click a folder<br/>This PC · Win+E · Recycle Bin"])
 
     subgraph REG["HKEY_CURRENT_USER"]
-        KEYS["Folder / Directory / Drive shells<br/>CLSID opennewwindow · This PC"]
+        KEYS["Folder / Directory / Drive shells<br/>CLSID opennewwindow · This PC · Recycle Bin"]
+    end
+
+    subgraph SET["Files Companion"]
+        SHIM["FilesOpen.exe<br/><i>launch shim</i>"]
+        ANIM["icon fade / zoom<br/><i>~0.2 s</i>"]
+        RB["Moderna Recycle Bin<br/><i>WebView2 UI</i>"]
     end
 
     USER --> KEYS
-    KEYS --> SHIM["FilesOpen.exe<br/><i>launch shim</i>"]
+    KEYS --> SHIM
+    KEYS --> RB
     SHIM -->|"start or activate"| FILES["Files"]
-    SHIM -->|"plays on top"| ANIM["icon fade / zoom<br/><i>~0.2 s</i>"]
-    SHIM -.->|"if this is &quot;This PC&quot;"| HOME["Files Home page<br/><i>drive cards with capacity</i>"]
-    SHIM -.->|"if this is the Recycle Bin"| RB["Modern Recycle Bin"]
+    SHIM -->|"plays on top"| ANIM
+    SHIM -.->|"if this is &quot;This PC&quot;"| HOME["Files Home<br/><i>drive cards with capacity</i>"]
 ```
 
-**The redirects it writes** (all under `HKEY_CURRENT_USER`, no admin rights):
+**The registry values it writes** (all `HKEY_CURRENT_USER`, no admin rights):
 
 | Registry key | Value |
 |---|---|
-| `SOFTWARE\Classes\Folder\shell\open\command` | `"…\FilesOpen.exe" "%1"` |
-| `SOFTWARE\Classes\Folder\shell\explore\command` | `"…\FilesOpen.exe" "%1"` |
-| `SOFTWARE\Classes\Folder\shell\OpenWithFiles\command` | `"…\FilesOpen.exe" "%1"` |
-| `SOFTWARE\Classes\Directory\shell\OpenWithFiles\command` | `"…\FilesOpen.exe" "%1"` |
-| `SOFTWARE\Classes\Drive\shell\OpenWithFiles\command` | `"…\FilesOpen.exe" "%1"` |
+| `SOFTWARE\Classes\Folder\shell\open\command` | `"…\FilesCompanion\FilesOpen.exe" "%1"` |
+| `SOFTWARE\Classes\Folder\shell\explore\command` | same |
+| `SOFTWARE\Classes\Folder\shell\OpenWithFiles\command` | same |
+| `SOFTWARE\Classes\Directory\shell\OpenWithFiles\command` | same |
+| `SOFTWARE\Classes\Drive\shell\OpenWithFiles\command` | same |
 | `SOFTWARE\Classes\CLSID\{52205fd8-…}\shell\opennewwindow\command` | `"…\FilesOpen.exe"` (Win+E) |
 | `SOFTWARE\Classes\CLSID\{20D04FE0-…}\shell\open\command` | `"…\FilesOpen.exe"` (This PC) |
-| `SOFTWARE\Classes\CLSID\{645FF040-…}\shell\open\command` | `"…\ModernRecycleBin\RecycleBin.exe"` (optional) |
+| `SOFTWARE\Classes\CLSID\{645FF040-…}\shell\open\command` | `"…\ModernRecycleBin\RecycleBin.exe"` |
 
-The keys that Explorer also handles get `DelegateExecute=""` so the built-in
-delegate cannot take over again.
+The keys Explorer also handles get `DelegateExecute=""` so the built-in delegate
+cannot take over again.
 
 **Why the shim exists at all.** With Files resident, a direct launch is just a
 process activation and Windows has nothing to animate. The shim starts Files the
@@ -133,66 +163,81 @@ normal way and then plays a short layered-window animation itself (120 px icon,
 scale 0.92 → 1.00 → 1.06, about 0.21 s), which is what makes the window feel like
 it is opening rather than appearing.
 
-**Two safety rules this project follows**, learned from shipping the companion
+**Three safety rules this project follows**, learned from shipping the companion
 Recycle Bin app:
 
-- The **uninstaller lives next to the install folder**, never inside it — Windows
-  will not let a running executable delete its own folder.
-- Uninstall removes a registry value **only when it still points at this
-  install's exact path**. If you have your own `FilesOpen.exe` somewhere else, its
-  configuration is left untouched.
+- The **uninstaller lives next to the install folders**, never inside them —
+  Windows will not let a running executable delete its own folder.
+- Uninstall removes a registry value **only when it still points at this exact
+  install**, so a configuration you set up by hand is never clobbered.
+- The bundled Recycle Bin is removed on uninstall **only when this installer put
+  it there** (tracked with a marker file), so a copy you installed separately
+  survives.
+
+## 🛠️ Building from source
+
+You need nothing but the .NET Framework compiler that ships with Windows.
+
+```cmd
+git clone https://github.com/Dannyzzy/Files-Companion.git
+cd Files-Companion
+build.cmd
+```
+
+`vendor\RecycleBin` holds the prebuilt Recycle Bin component; see
+`vendor\README.md` and `scripts\refresh-vendor.ps1` for how to refresh it from the
+sibling project.
+
+```
+dist\FilesOpen.exe             the launch shim (standalone)
+dist\FilesCompanionSetup.exe   all-in-one installer (both components)
+```
 
 ## ❓ Troubleshooting
 
 <details>
 <summary><b>Folders still open in Explorer</b></summary>
 
-Make sure Files is installed and that you let the installer tick the routing
-option. Restarting Explorer is not required for new windows, but already-open
-Explorer windows keep their old behaviour.
+Make sure Files is installed and that you left the routing option ticked.
+Explorer windows that are already open keep their old behaviour; new ones use
+Files.
 </details>
 
 <details>
-<summary><b>I do not want the animation, only the routing</b></summary>
+<summary><b>The Recycle Bin window is blank</b></summary>
 
-The animation is drawn by the shim itself, so routing and animation come as one
-piece. If you want Files' own routing without any shim, leave this project out
-and use **Files → Settings → Advanced → Set Files as default file manager**
-instead; Files Companion exists precisely because that route loses the startup
-animation once Files is resident.
+That component renders its interface with the WebView2 Runtime. Windows 11 and
+current Windows 10 include it; the installer warns you if it is missing and links
+to Microsoft's official download.
 </details>
 
 <details>
 <summary><b>How do I undo everything?</b></summary>
 
 Run `Uninstall.cmd` in `%LOCALAPPDATA%\FilesCompanion`. It deletes the registry
-values listed above, removes the folder, and deletes itself. Nothing else on the
-system is touched.
+values above, removes both component folders, and deletes itself. Nothing else on
+the system is touched.
 </details>
 
 <details>
-<summary><b>Does it work without Files?</b></summary>
+<summary><b>Windows SmartScreen warns me about the installer</b></summary>
 
-The shim falls back to launching Files' own launcher if it can find it; without
-Files installed the redirects would have nothing to open, so install Files first.
+The release binaries are not code-signed (a certificate costs money for an
+open-source project). Choose **More info → Run anyway**, or build from source with
+`build.cmd`.
 </details>
 
 ## 🤝 Contributing
 
 Issues and pull requests are welcome. Please include your Windows version, the
-Files version, and which of the redirects misbehaves.
+Files version, and which component misbehaves.
 
 ## 📄 License
 
 Released under the [MIT License](LICENSE).
 
 Files itself is a separate project by the
-[Files community](https://github.com/files-community/Files) and is licensed
-MIT/MPL. Files Companion contains **no code or assets from Files** — it only
-starts it and redirects shell verbs to it.
-
-## 🔗 See also
-
-**[Modern Recycle Bin](https://github.com/Dannyzzy/Modern-Recycle-Bin)** — a Recycle
-Bin for Windows 11 with image previews, restore-anywhere and copy-out. Files
-Companion can install and wire it up for you.
+[Files community](https://github.com/files-community/Files), licensed MIT/MPL.
+Files Companion contains no code or assets from Files — it only starts it and
+redirects shell verbs to it. The bundled WebView2 runtime loader is Microsoft's,
+under the terms in `vendor\RecycleBin\WebView2-LICENSE.txt`.
