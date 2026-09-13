@@ -3,10 +3,16 @@ setlocal enabledelayedexpansion
 rem ===============================================================
 rem  Files Companion - one-click installer
 rem
-rem  Downloads the newest release and starts it. Some networks block
-rem  github.com outright, so this tries the direct download first and
-rem  the ghfast.top mirror second, and only then gives up - telling
-rem  you exactly what to do by hand.
+rem  Downloads the newest release and starts it. Two things get in
+rem  the way of a plain download, so both are handled here:
+rem
+rem   1. github.com may be unreachable - the download times out at
+rem      0 bytes. The ghfast.top mirror is tried as a second channel.
+rem   2. The Windows proxy (accelerators set one) is ignored by
+rem      curl.exe, so a machine where the browser opens GitHub can
+rem      still fail to download. PowerShell is used instead: .NET
+rem      follows the system proxy, and connects directly when there
+rem      is no proxy.
 rem
 rem  No administrator rights are needed, and nothing is installed
 rem  until you confirm it in the installer window.
@@ -36,8 +42,10 @@ if not defined OK (
   echo       %MIRROR%
   echo.
   echo     What to do:
-  echo       1. Run this script again - the mirror is sometimes slow.
-  echo       2. Open this page in a browser and download the setup by hand:
+  echo       1. Run this script again - either channel can be slow once.
+  echo       2. If you use an accelerator, turn it on - the system proxy
+  echo          is followed automatically.
+  echo       3. Or download by hand in a browser from
   echo          https://ghfast.top/https://github.com/%REPO%/releases/latest
   echo.
   pause
@@ -63,7 +71,7 @@ rem  file behind, so the size is checked as well as the exit code.
 rem ---------------------------------------------------------------
 :fetch
 echo [..] Downloading from %~1 ...
-curl.exe -L --fail --silent --show-error --retry 2 --retry-delay 2 --connect-timeout 15 --max-time 300 -o "%OUT%" "%~2"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ProgressPreference='SilentlyContinue'; try { Invoke-WebRequest -Uri '%~2' -OutFile '%OUT%' -UseBasicParsing -TimeoutSec 180 } catch { Write-Host '      request failed - timeout, blocked, or DNS'; exit 1 }"
 if errorlevel 1 (
   echo [x]  %~1 failed.
   if exist "%OUT%" del /f /q "%OUT%" >nul 2>&1
