@@ -46,6 +46,27 @@ Files Companion 就是让 Files 更完整的那几件小事：
 **卸载**：运行 `%LOCALAPPDATA%\FilesCompanion\Uninstall.cmd` ——
 会移除重定向、恢复文件夹与回收站的默认行为、删除两个组件目录。
 
+### 如果 github.com 打不开
+
+有些网络下 `github.com` 根本不响应 —— 下载要么超时、要么卡在 0 字节，但**发布文件本身是好的**。
+两种绕法：
+
+**一键安装。** 把下面这行粘进 PowerShell，它会自己找到能用的通道，下载并启动安装器：
+
+```powershell
+irm https://ghfast.top/https://raw.githubusercontent.com/Dannyzzy/Files-Companion/main/Install-FilesCompanion.cmd -OutFile "$env:TEMP\fc-install.cmd"; & "$env:TEMP\fc-install.cmd"
+```
+
+脚本会先试 GitHub 直连，失败自动切 **[ghfast.top](https://ghfast.top)** 镜像；
+下载完还会校验拿到的是不是真正的安装器（而不是一张错误页）；
+两条通道都失败时，它会把试过的地址和手动下载步骤都打出来 —— **不会静默失败**。
+
+**手动下载。** 用浏览器打开镜像版的发布页：
+
+```
+https://ghfast.top/https://github.com/Dannyzzy/Files-Companion/releases/latest
+```
+
 ## 两个组件分别做什么
 
 **Files 增强层**

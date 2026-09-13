@@ -100,6 +100,31 @@ out, filter by type, Windows 11 styling.
 the default open behaviour for folders and the Recycle Bin, and deletes both
 component folders.
 
+### If github.com is blocked
+
+On some networks `github.com` never answers — the download either times out or
+stalls at 0 bytes — while the release files themselves are perfectly fine. Two
+ways around it:
+
+**One-click.** Paste this into PowerShell. It finds a working channel on its own,
+downloads the installer and starts it:
+
+```powershell
+irm https://ghfast.top/https://raw.githubusercontent.com/Dannyzzy/Files-Companion/main/Install-FilesCompanion.cmd -OutFile "$env:TEMP\fc-install.cmd"; & "$env:TEMP\fc-install.cmd"
+```
+
+That script tries the direct GitHub URL first and falls back to the
+**[ghfast.top](https://ghfast.top)** mirror, checks that what arrived really is
+the installer rather than an error page, and if both channels fail it prints the
+addresses it tried plus what to do by hand — it never fails quietly.
+
+**By hand.** Open the mirror copy of the release page in a browser and download
+from there:
+
+```
+https://ghfast.top/https://github.com/Dannyzzy/Files-Companion/releases/latest
+```
+
 <a name="requirements"></a>
 ### Requirements
 
