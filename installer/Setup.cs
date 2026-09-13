@@ -42,7 +42,7 @@ using Microsoft.Win32;
 internal static class Program
 {
     internal const string AppName = "Files Companion";
-    internal const string Version = "1.2.3";
+    internal const string Version = "1.3.0";
     internal const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
 
     internal static bool Silent;
@@ -783,8 +783,15 @@ internal sealed class SetupForm : Form
         using (var b = new LinearGradientBrush(new Rectangle(cx - r, cy - r, r * 2, r * 2), Theme.AccentHi, Theme.Accent, 45f))
             g.FillPath(b, p);
 
-        TextRenderer.DrawText(g, Program.AppName + "  " + Program.Version, _fSmall,
-            new Point(cx + S(18), cy - S(8)), Theme.InkFaint, TextFormatFlags.NoPadding);
+        // The app name carries the brand, the version is reference data - two
+        // weights, so the eye lands on the name first instead of reading one
+        // flat grey line.
+        int tx = cx + S(18), ty = cy - S(8);
+        TextRenderer.DrawText(g, Program.AppName, _fSmall, new Point(tx, ty), Theme.InkDim, TextFormatFlags.NoPadding);
+        Size nameSize = TextRenderer.MeasureText(g, Program.AppName, _fSmall,
+            new Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding);
+        TextRenderer.DrawText(g, Program.Version, _fSmall,
+            new Point(tx + nameSize.Width + S(8), ty), Theme.InkFaint, TextFormatFlags.NoPadding);
 
         // close button
         var box = CloseRect;
