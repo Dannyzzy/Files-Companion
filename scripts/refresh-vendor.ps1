@@ -1,7 +1,7 @@
 # Refresh vendor/RecycleBin from a local build of the sibling project.
 # Usage: .\scripts\refresh-vendor.ps1 [-Source <path to Modern-Recycle-Bin>]
 
-param([string]$Source = 'C:\Users\35175\.dsh\projects\Modern-Recycle-Bin')
+param([string]$Source = 'D:\DeepSeek Harness\Project development\Modern-Recycle-Bin')
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
