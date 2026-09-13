@@ -12,7 +12,7 @@ param([Parameter(Mandatory = $true)][string]$Version)
 $ErrorActionPreference = 'Stop'
 
 $root  = Split-Path -Parent $PSScriptRoot
-$gh    = Join-Path $root 'tools\gh\bin\gh.exe'
+$gh    = Join-Path $root '..\tools\gh\bin\gh.exe'
 $repo  = 'Dannyzzy/Files-Companion'
 $tag   = "v$Version"
 $notes = Join-Path $root "docs\RELEASE-NOTES-$tag.md"
