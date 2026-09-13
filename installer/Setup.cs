@@ -42,7 +42,7 @@ using Microsoft.Win32;
 internal static class Program
 {
     internal const string AppName = "Files Companion";
-    internal const string Version = "1.2.2";
+    internal const string Version = "1.2.3";
     internal const string RecycleBinClsid = "{645FF040-5081-101B-9F08-00AA002F954E}";
 
     internal static bool Silent;
@@ -393,7 +393,9 @@ internal static class Installer
         // 3) the Recycle Bin component
         if (withRecycleBin)
         {
+            string handMade = HandMadeRecycleBin();
             if (File.Exists(RecycleBinExe)) lines.Add("✓ 回收站组件已安装");
+            else if (handMade != null) lines.Add("✓ 回收站组件已就位（自定义位置：" + handMade + "）");
             else lines.Add("✗ 回收站组件缺失");
 
             if (WebView2Installed()) lines.Add("✓ WebView2 运行时可用");
@@ -401,6 +403,50 @@ internal static class Installer
         }
 
         return lines.ToArray();
+    }
+
+    /// <summary>The Recycle Bin may already be served by a copy the user deployed by
+    /// hand - the redirect keys point straight at it. 1.2.2 taught the FilesOpen
+    /// check to accept a custom shim; this is the same courtesy for the bin, so a
+    /// working hand-made setup is not reported as broken.</summary>
+    private static string HandMadeRecycleBin()
+    {
+        foreach (string sub in RecycleBinKeys)
+        {
+            string v = null;
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(sub))
+                    if (k != null) v = k.GetValue(string.Empty) as string;
+            }
+            catch { }
+            string p = ExistingExe(v);
+            if (p != null && p.IndexOf(RecycleBinDir, StringComparison.OrdinalIgnoreCase) < 0)
+                return p;
+        }
+        return null;
+    }
+
+    /// <summary>Pulls the executable out of a shell command line
+    /// ("\"C:\\dir\\x.exe\" \"%1\"" becomes C:\dir\x.exe) and returns it only when
+    /// the file is still there. Returns null for empty, unparsable or dead paths.</summary>
+    private static string ExistingExe(string command)
+    {
+        if (string.IsNullOrEmpty(command)) return null;
+        string p = command.Trim();
+        if (p.StartsWith("\""))
+        {
+            int end = p.IndexOf('"', 1);
+            if (end < 1) return null;
+            p = p.Substring(1, end - 1);
+        }
+        else
+        {
+            int sp = p.IndexOf(' ');
+            if (sp > 0) p = p.Substring(0, sp);
+        }
+        p = p.Trim();
+        return (p.Length > 0 && File.Exists(p)) ? p : null;
     }
 
     internal static bool WebView2Installed()

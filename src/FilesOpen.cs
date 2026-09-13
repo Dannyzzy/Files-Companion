@@ -52,6 +52,8 @@ internal static class Program
     private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst,
         ref SIZE psize, IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);
 
+    [DllImport("user32.dll")] private static extern bool SetProcessDPIAware();
+    [DllImport("user32.dll")] private static extern uint GetDpiForSystem();
     [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateCompatibleDC(IntPtr hDC);
@@ -409,12 +411,20 @@ internal static class Program
         text += "Windows     : " + Environment.OSVersion.VersionString + Environment.NewLine;
         text += "64-bit OS   : " + (Environment.Is64BitOperatingSystem ? "yes" : "no") + Environment.NewLine;
         text += "64-bit proc : " + (Environment.Is64BitProcess ? "yes" : "no") + Environment.NewLine;
-        try
+        // This process deliberately stays DPI-unaware (see PlayAnimation), which
+        // makes the desktop DC report a virtualised 96 dpi on a scaled display.
+        // --doctor runs before any window exists and exits straight after, so
+        // becoming aware here is safe - and it is the only way to print the real
+        // number instead of a number that hides the very scaling the user sees.
+        int dpi = 0;
+        try { SetProcessDPIAware(); } catch { }
+        try { dpi = (int)GetDpiForSystem(); } catch { dpi = 0; }
+        if (dpi <= 0)
         {
-            using (var g = Graphics.FromHwnd(IntPtr.Zero))
-                text += "Display DPI : " + g.DpiX + " (" + (int)Math.Round(g.DpiX / 96.0 * 100) + "%)" + Environment.NewLine;
+            try { using (var g = Graphics.FromHwnd(IntPtr.Zero)) dpi = (int)g.DpiX; } catch { }
         }
-        catch { }
+        if (dpi <= 0) dpi = 96;
+        text += "Display DPI : " + dpi + " (" + (int)Math.Round(dpi / 96.0 * 100) + "%)" + Environment.NewLine;
         text += Environment.NewLine;
 
         // --- where is Files ---------------------------------------------------
@@ -466,10 +476,24 @@ internal static class Program
         text += Environment.NewLine;
 
         // --- the Recycle Bin component ---------------------------------------
+        // The bin does not have to live in the folder we would have installed it
+        // to: a hand-made setup points the shell keys at its own copy, and calling
+        // that "missing" is the very mistake the shim check used to make.
         text += "Recycle Bin component" + Environment.NewLine;
         string rb = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             @"ModernRecycleBin\RecycleBin.exe");
-        text += "  " + (File.Exists(rb) ? "OK      : " + rb : "MISSING : " + rb) + Environment.NewLine;
+        string customRb = null;
+        if (!File.Exists(rb))
+        {
+            customRb = ExistingExe(RedirectTarget(
+                @"SOFTWARE\Classes\CLSID\{645FF040-5081-101B-9F08-00AA002F954E}\shell\open\command"));
+        }
+        if (File.Exists(rb))
+            text += "  OK      : " + rb + Environment.NewLine;
+        else if (customRb != null)
+            text += "  OK      : " + customRb + " (custom location)" + Environment.NewLine;
+        else
+            text += "  MISSING : " + rb + Environment.NewLine;
         text += "  WebView2: " + (WebView2Present() ? "installed" : "MISSING - the Recycle Bin UI needs it") + Environment.NewLine;
         text += Environment.NewLine;
 
@@ -488,6 +512,41 @@ internal static class Program
         Log("doctor written to " + outPath);
 
         try { Process.Start("notepad.exe", "\"" + outPath + "\""); } catch { }
+    }
+
+    /// <summary>Reads the command line a shell key is redirected to. Null when the
+    /// key is absent or unreadable.</summary>
+    private static string RedirectTarget(string sub)
+    {
+        try
+        {
+            using (Microsoft.Win32.RegistryKey k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(sub))
+                if (k != null) return k.GetValue(string.Empty) as string;
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>Pulls the executable out of a shell command line
+    /// ("\"C:\\dir\\x.exe\" \"%1\"" becomes C:\dir\x.exe) and returns it only when
+    /// the file is still there - a stale redirect must not read as healthy.</summary>
+    private static string ExistingExe(string command)
+    {
+        if (string.IsNullOrEmpty(command)) return null;
+        string p = command.Trim();
+        if (p.StartsWith("\""))
+        {
+            int end = p.IndexOf('"', 1);
+            if (end < 1) return null;
+            p = p.Substring(1, end - 1);
+        }
+        else
+        {
+            int sp = p.IndexOf(' ');
+            if (sp > 0) p = p.Substring(0, sp);
+        }
+        p = p.Trim();
+        return (p.Length > 0 && File.Exists(p)) ? p : null;
     }
 
     /// <summary>The Recycle Bin UI is rendered by WebView2, so its runtime has to be

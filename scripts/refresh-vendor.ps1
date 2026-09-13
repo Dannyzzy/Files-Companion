@@ -1,11 +1,15 @@
 # Refresh vendor/RecycleBin from a local build of the sibling project.
 # Usage: .\scripts\refresh-vendor.ps1 [-Source <path to Modern-Recycle-Bin>]
 
-param([string]$Source = 'D:\DeepSeek Harness\Project development\Modern-Recycle-Bin')
+param([string]$Source)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $ven  = Join-Path $root 'vendor\RecycleBin'
+
+# Default to the sibling checkout: clone the two repos side by side and this
+# works on any machine. Pass -Source for anything else.
+if (-not $Source) { $Source = Join-Path (Split-Path -Parent $root) 'Modern-Recycle-Bin' }
 
 if (-not (Test-Path (Join-Path $Source 'dist\RecycleBin.exe'))) {
     throw "Build the source project first (its dist\RecycleBin.exe is missing): $Source"
